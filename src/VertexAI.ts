@@ -1,8 +1,10 @@
 import {
   FunctionDeclarationSchemaType,
-  GoogleGenerativeAI,
+  HarmBlockThreshold,
+  HarmCategory,
   Tool,
-} from '@google/generative-ai';
+  VertexAI as Vertex,
+} from '@google-cloud/vertexai';
 
 import AI, {
   FunctionCall,
@@ -10,13 +12,20 @@ import AI, {
   FunctionCallResponse,
 } from './AI';
 
-export default class GeminiAI extends AI {
-  private googleGenerativeAI: GoogleGenerativeAI;
+const project = 'liferaycloud-development';
+const location = 'us-central1';
+const textModel = 'gemini-pro';
 
-  constructor(apiKey: string) {
+export default class VertexAI extends AI {
+  private vertexAI: Vertex;
+
+  constructor(apiKey?: string) {
     super();
 
-    this.googleGenerativeAI = new GoogleGenerativeAI(apiKey);
+    this.vertexAI = new Vertex({
+      project,
+      location,
+    });
   }
 
   private normalizeFunctions(functions: FunctionCall[]) {
@@ -49,11 +58,45 @@ export default class GeminiAI extends AI {
     return JSON.parse(functionsAsString);
   }
 
+  async testCall(_payload: FunctionCallPayload): Promise<FunctionCallResponse> {
+    const model = this.vertexAI.getGenerativeModel({
+      model: textModel,
+      safetySettings: [
+        {
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        },
+      ],
+      generationConfig: { maxOutputTokens: 256 },
+    });
+
+    const request = {
+      contents: [
+        { role: 'user', parts: [{ text: 'How are you doing today?' }] },
+      ],
+    };
+
+    const result = await model.generateContent(request);
+    const response = result.response;
+
+    console.log(response);
+
+    return {} as any;
+  }
+
   async getFunctionCall(
     payload: FunctionCallPayload
   ): Promise<FunctionCallResponse> {
-    const model = this.googleGenerativeAI.getGenerativeModel({
-      model: 'gemini-pro',
+    console.log('Called');
+    const model = this.vertexAI.getGenerativeModel({
+      model: textModel,
+      safetySettings: [
+        {
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        },
+      ],
+      generationConfig: { maxOutputTokens: 256 },
     });
 
     const functions = this.normalizeFunctions(
@@ -74,6 +117,8 @@ export default class GeminiAI extends AI {
         parts: [{ text: message.text }],
       })),
     });
+
+    console.log({ result });
 
     const response = await result.response;
 
